@@ -9,6 +9,10 @@ def center_text(text, page_width, char_width = pyxel.FONT_WIDTH):
     text_width = len(text) * char_width
     return (page_width - text_width) / 2
 
+# The same thing, but for the Y position.
+def virtical_center_text(text, page_height, char_height = pyxel.FONT_HEIGHT):
+    return (page_height / 2) - (char_height / 2)
+
 # Calculate starting X value for right-aligned text.
 def right_text(text, page_width, char_width = pyxel.FONT_WIDTH):
     text_width = len(text) * char_width
@@ -41,6 +45,7 @@ class Direction(enum.Enum):
 class GameState(enum.Enum):
     RUNNING = 0
     GAME_OVER = 1
+    PAUSED = 2
 
 
 # Level class for drawing walls.
@@ -112,6 +117,11 @@ class Hud:
         self.apples_text = "Apples "
         self.apples_text_x = len(self.level_text) * pyxel.FONT_WIDTH + self.level_text_x + 5
 
+        # Paused label.
+        self.pause_text = "PAUSED"
+        self.pause_text_x = center_text(self.pause_text, self.w)
+        self.pause_text_y = virtical_center_text(self.pause_text, self.h)
+
     def draw_title(self):
         # Draw a rectangle behind the title text.
         # Arguments:
@@ -145,6 +155,10 @@ class Hud:
         self.apples_text = "Apples " + str(apples)
         pyxel.rect(self.apples_text_x - 1, 0, len(self.apples_text) * pyxel.FONT_WIDTH + 1, pyxel.FONT_HEIGHT + 1, 1)
         pyxel.text(self.apples_text_x, 0, self.apples_text, 8)
+
+    def draw_paused(self):
+        pyxel.rect(self.pause_text_x - 1, self.pause_text_y - 1, len(self.pause_text) * pyxel.FONT_WIDTH + 1, pyxel.FONT_HEIGHT + 1, 1)
+        pyxel.text(self.pause_text_x, self.pause_text_y, self.pause_text, 7)
 
 
 
@@ -314,6 +328,16 @@ class App:
         else:
             pyxel.playm(0, loop=True)
             self.play_music = True
+   
+
+    def toggle_paused(self):
+        # Avoid pausing if the state is GAME_OVER
+        if self.game_state != GameState.GAME_OVER:
+            if self.game_state == GameState.RUNNING:
+                self.game_state = GameState.PAUSED
+
+            else:
+                self.game_state = GameState.RUNNING
 
 
 
@@ -331,12 +355,17 @@ class App:
         for s in self.snake:
             s.draw(self.snake_direction)
 
-        # Track current game state
+        # Draw the hud elements.
         #pyxel.text(10, 10, str(self.game_state), 12)
         #self.hud.draw_title()
         self.hud.draw_score(self.score)
         self.hud.draw_level(self.current_level)
         self.hud.draw_apples(self.apples_eaten)
+
+        # Handle pausing.
+        if self.game_state == GameState.PAUSED:
+            self.hud.draw_paused()
+
 
 
     def check_collisions(self):
@@ -482,6 +511,10 @@ class App:
         # better.
         if pyxel.btnr(pyxel.KEY_M):
             self.toggle_music()
+
+        # Allow the game to be paused.
+        if pyxel.btnr(pyxel.KEY_P):
+            self.toggle_paused()
 
         # Allow the game to be restarted.
         if self.game_state == GameState.GAME_OVER:
