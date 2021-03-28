@@ -3,6 +3,17 @@ import enum
 import time
 import random
 import collections
+    
+# Calculate starting X value for centered text.
+def center_text(text, page_width, char_width = pyxel.FONT_WIDTH):
+    text_width = len(text) * char_width
+    return (page_width - text_width) / 2
+
+# Calculate starting X value for right-aligned text.
+def right_text(text, page_width, char_width = pyxel.FONT_WIDTH):
+    text_width = len(text) * char_width
+    return page_width - (text_width + char_width)
+
 
 # Check if 2 objects are overlapping
 def intersects(objA, objB):
@@ -79,6 +90,64 @@ class SnakeSection():
         pyxel.blt(self.x, self.y, 0, sprite_x, sprite_y, width, height)
 
 
+# Responsible for drawing scores and other UI stuff
+class Hud:
+    def __init__(self, w, h):
+        self.w = w
+        self.h = h
+
+        # The title text is centered.
+        self.title_text = "Nibbles"
+        self.title_text_x = center_text(self.title_text, self.w)
+
+        # The score text is on the right side.
+        self.score_text = str(0)
+        self.score_text_x = right_text(self.score_text, self.w)
+
+        # The level text is on the left side.
+        self.level_text = "Level 0"
+        self.level_text_x = 10
+
+        # The apples text is right next to the level text.
+        self.apples_text = "Apples "
+        self.apples_text_x = len(self.level_text) * pyxel.FONT_WIDTH + self.level_text_x + 5
+
+    def draw_title(self):
+        # Draw a rectangle behind the title text.
+        # Arguments:
+        # - X
+        # - Y
+        # - Width
+        # - Height
+        # - Color (ID of the current palete)
+        pyxel.rect(self.title_text_x - 1, 0, len(self.title_text) * pyxel.FONT_WIDTH + 1, pyxel.FONT_HEIGHT + 1, 1)
+
+        # Draw the title text.
+        # Arguments:
+        # - X
+        # - Y
+        # - Text
+        # - Color
+        pyxel.text(self.title_text_x, 1, self.title_text, 12)
+
+    def draw_score(self, score):
+        self.score_text = str(score)
+        self.score_text_x = right_text(self.score_text, self.w)
+        pyxel.rect(self.score_text_x - 1, 0, len(self.score_text) * pyxel.FONT_WIDTH + 1, pyxel.FONT_HEIGHT + 1, 1)
+        pyxel.text(self.score_text_x, 0, self.score_text, 3)
+
+    def draw_level(self, level):
+        self.level_text = "Level " + str(level)
+        pyxel.rect(self.level_text_x - 1, 0, len(self.level_text) * pyxel.FONT_WIDTH + 1, pyxel.FONT_HEIGHT + 1, 1)
+        pyxel.text(self.level_text_x, 0, self.level_text, 3)
+
+    def draw_apples(self, apples):
+        self.apples_text = "Apples " + str(apples)
+        pyxel.rect(self.apples_text_x - 1, 0, len(self.apples_text) * pyxel.FONT_WIDTH + 1, pyxel.FONT_HEIGHT + 1, 1)
+        pyxel.text(self.apples_text_x, 0, self.apples_text, 8)
+
+
+
 # Make an apple for the snake to eat.
 # Handles drawing and moving the apple, anything on the apple (snake eats it).
 class Apple:
@@ -117,10 +186,15 @@ class App:
         # First two arguments are the width and height
         self.screenWidth = 160
         self.screenHeight = 120
+
+        # Initialize the Pyxel
         pyxel.init(self.screenWidth,self.screenHeight, scale=6, caption="Nibbles", fps=60)
 
         # Load the main spritesheet.
         pyxel.load("assets/resources.pyxres")
+
+        # Whether or not we want music.
+        self.play_music = True
 
         # Game state.
         #self.game_state = GameState.RUNNING
@@ -148,7 +222,7 @@ class App:
         #self.time_last_frame = time.time()
         #self.dt = 0
         #self.time_since_last_move = 0
-
+       
         # Input queing
         # Store direction changes so that the player can chain them.
         self.input_que = collections.deque()
@@ -160,8 +234,17 @@ class App:
 
 
     def start_new_game(self):
+        
+        # Score, apples, and level
+        self.score = 0
+        self.apples_eaten = 0
+        self.current_level = 1
 
+        # Instantiate this to draw the walls.
         self.level = Level(self.screenWidth, self.screenHeight)
+
+        # Hud elements
+        self.hud = Hud(self.screenWidth, self.screenHeight)
 
         # Clear and rebuild the snake.
         self.snake.clear()
@@ -184,6 +267,11 @@ class App:
 
         # Reset the input que
         self.input_que.clear()
+
+        # Check if we want music.
+        # If so, play it.
+        if self.play_music:
+            pyxel.playm(0, loop=True)
 
         # Restart the game.
         self.game_state = GameState.RUNNING
@@ -212,6 +300,22 @@ class App:
                 # Check for collisions.
                 self.check_collisions()
 
+                # Increase score:
+                self.score += len(self.snake) * self.apples_eaten + 1
+
+
+
+    def toggle_music(self):
+        if self.play_music:
+            # Stop playing all sounds on all channels.
+            pyxel.stop()
+            self.play_music = False
+
+        else:
+            pyxel.playm(0, loop=True)
+            self.play_music = True
+
+
 
     def draw(self):
 
@@ -228,7 +332,12 @@ class App:
             s.draw(self.snake_direction)
 
         # Track current game state
-        pyxel.text(10, 10, str(self.game_state), 12)
+        #pyxel.text(10, 10, str(self.game_state), 12)
+        #self.hud.draw_title()
+        self.hud.draw_score(self.score)
+        self.hud.draw_level(self.current_level)
+        self.hud.draw_apples(self.apples_eaten)
+
 
     def check_collisions(self):
         # Apple
@@ -240,14 +349,29 @@ class App:
             # Move the apple to another location.
             self.move_apple()
 
+            # Increment the apple counter.
+            self.apples_eaten += 1
+
+            # Play a sound effect.
+            # Sound track 0 on Channel 3.
+            pyxel.play(3, 0)
+
         # Snake crashing in itself.
         for s in self.snake:
+            # Ignore the head section
             if s == self.snake[0]:
                 continue
 
             else:
                 if intersects(s, self.snake[0]):
+                    # End the game.
                     self.game_state = GameState.GAME_OVER
+
+                    # Stop all sound.
+                    pyxel.stop()
+
+                    # Play the crash sound.
+                    pyxel.play(3, 1)
 
         
         # Check for collisions with the wall.
@@ -259,7 +383,7 @@ class App:
         # The YouTube mentioned that this returned the "sprite ID" at X, Y.
         # Neither the YouTuber CaffeinatedTech nor the official Pyxel
         # documentation explain why '== 3' works, but no other number works.
-        print(pyxel.tilemap(0).get(self.snake[0].x / 8, self.snake[0].y / 8))
+        #print(pyxel.tilemap(0).get(self.snake[0].x / 8, self.snake[0].y / 8))
         
         # Furthermore, when the result is printed, 3 and 4 are the only numbers
         # the expression produces. 3 is produced whenever the head of the
@@ -270,6 +394,8 @@ class App:
         # this doesn't make sense.
         if pyxel.tilemap(0).get(self.snake[0].x / 8, self.snake[0].y / 8) == 3:
             self.game_state = GameState.GAME_OVER
+            pyxel.stop()
+            pyxel.play(3, 1)
 
 
 
@@ -351,11 +477,22 @@ class App:
 
 
     def check_input(self):
+        # Allow the music to be switched on and off.
+        # NOTE: Discovered that 'btnr' for tracking button RELEASE works
+        # better.
+        if pyxel.btnr(pyxel.KEY_M):
+            self.toggle_music()
+
         # Allow the game to be restarted.
         if self.game_state == GameState.GAME_OVER:
             if pyxel.btn(pyxel.KEY_ENTER):
                 self.start_new_game()
 
+
+
+        ############
+        # MOVEMENT
+        ############
         # If the que has no inputs, check against the snake direction.
         if len(self.input_que) == 0:
             #checkAgainst = self.snake_direction
